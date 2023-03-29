@@ -40,14 +40,15 @@ class CombatStats:
         self.statuses = list()
         self.status_next_turn = list()
         self.combat_deck = list()
-        self.chosen_skill = list()
+        self.skill_slots = list()
         self.status_count_next_turn = list()
         self.speed = 0
-
-        if not configs.GAIN_LOSE_SANITY:
-            self.sp = configs.STARTING_SANITY
+        self.sp = configs.STARTING_SANITY
 
         self.gain_skill_slot()
+
+    def __str__(self):
+        return self.sinner.name
 
     sinner: Sinner
     hp = 0
@@ -59,7 +60,7 @@ class CombatStats:
     damaged_this_turn = False
     damaged_last_turn = False
     speed: int
-    chosen_skill: list
+    skill_slots: list
     team = None
     next_stagger_threshold = 0
     stagger_level = 0
@@ -69,29 +70,39 @@ class CombatStats:
 
     def gain_skill_slot(self):
         self.combat_deck.append(list())
-        self.chosen_skill.append(list())
+        self.skill_slots.append(list())
 
-    def choose_skills(self, opponents):
+    def choose_skill(self, skill_slot, opponent, targeted_skill_slot):
         if self.stagger_level == 0:
-            for skill_slot in range(len(self.combat_deck)):
-                if len(self.combat_deck[skill_slot]) < 2:
-                    new_deck = [0, 0, 0, 1, 1, 2]
-                    random.shuffle(new_deck)
-                    self.combat_deck[skill_slot] += new_deck
+            if len(self.combat_deck[skill_slot]) < 2:
+                new_deck = [0, 0, 0, 1, 1, 2]
+                random.shuffle(new_deck)
+                self.combat_deck[skill_slot] += new_deck
 
-                chosen_skill = max(self.combat_deck[skill_slot][0], self.combat_deck[skill_slot][1])
-                self.chosen_skill[skill_slot] = CombatSkill(self.sinner.skills[chosen_skill], self, opponents[skill_slot])
-                self.combat_deck[skill_slot].remove(chosen_skill)
+            skill_ranking = [self.rank_skill(self.combat_deck[skill_slot][0]), self.rank_skill(self.combat_deck[skill_slot][1])]
+            if skill_ranking[0] >= skill_ranking[1]:
+                chosen_skill = self.combat_deck[skill_slot][0]
+            else:
+                chosen_skill = self.combat_deck[skill_slot][1]
+
+            self.skill_slots[skill_slot] = CombatSkill(self.sinner.skills[chosen_skill], self, opponent, targeted_skill_slot)
+            self.combat_deck[skill_slot].remove(chosen_skill)
         else:
             return -1
 
+    def rank_skill(self, skill):
+        if self.sinner.skills[skill].name == "Rip Space" and not self.get_status_count(StatusType.CHARGE) >= 10:
+            return -1
+        else:
+            return skill
+
     def get_off(self):
-        return self.sinner.off_base - self.get_status_amount(StatusType.OFFENSE_LEVEL_DOWN) + \
-               self.get_status_amount(StatusType.OFFENSE_LEVEL_UP)
+        return math.floor(self.sinner.off_base * (1-0.1*self.get_status_amount(StatusType.OFFENSE_LEVEL_DOWN) +
+                          0.1*self.get_status_amount(StatusType.OFFENSE_LEVEL_UP)))
 
     def get_def(self):
-        return self.sinner.def_base + self.get_status_amount(StatusType.DEFENSE_LEVEL_UP) - \
-               self.get_status_amount(StatusType.DEFENSE_LEVEL_DOWN)
+        return math.floor(self.sinner.def_base * (1 - 0.1 * self.get_status_amount(StatusType.DEFENSE_LEVEL_DOWN) +
+                                           0.1 * self.get_status_amount(StatusType.DEFENSE_LEVEL_UP)))
 
     def get_resistance(self, skill: Skill):
         if configs.USE_STAGGER and self.stagger_level > 0:
@@ -277,20 +288,23 @@ class CombatStats:
         if damage > 0:
             self.damaged_this_turn = True
 
-        if configs.USE_STAGGER:
-            while True:
-                if len(self.sinner.stagger) > self.next_stagger_threshold:
-                    if self.get_stagger_threshold() >= self.hp:
-                        if not self.staggered_last_turn:
-                            self.stagger_level += 1
-                            if configs.COMBAT_VERBOSE:
-                                print(f"{self.sinner.name} is staggered!")
-                        self.next_stagger_threshold += 1
-                        self.stagger_threshold_offset = 0
+        if configs.COMBAT_VERBOSE and self.hp <= 0:
+            print(f"{self} has died.")
+        else:
+            if configs.USE_STAGGER:
+                while True:
+                    if len(self.sinner.stagger) > self.next_stagger_threshold:
+                        if self.get_stagger_threshold() >= self.hp:
+                            if not self.staggered_last_turn:
+                                self.stagger_level += 1
+                                if configs.COMBAT_VERBOSE:
+                                    print(f"{self.sinner.name} is staggered!")
+                            self.next_stagger_threshold += 1
+                            self.stagger_threshold_offset = 0
+                        else:
+                            break
                     else:
                         break
-                else:
-                    break
 
     def heal(self, heal_amount):
         old_hp = self.hp
@@ -316,7 +330,13 @@ class CombatStats:
     def spend_charge(self, amount):
         charge = self.get_status_count(StatusType.CHARGE)
         if charge >= amount:
-            self.lower_status_count(StatusType.CHARGE, amount=3)
+            self.lower_status_count(StatusType.CHARGE, amount=amount)
+            return True
+        else:
+            return False
+
+    def can_act(self):
+        if self.stagger_level == 0 and self.hp >= 0:
             return True
         else:
             return False
@@ -326,7 +346,16 @@ class Team:
     def __init__(self):
         self.sinners = list()
 
+    def __str__(self):
+        sinner_strs = []
+        for sinner in self.sinners:
+            sinner_strs.append(str(sinner))
+
+        return ", ".join(sinner_strs)
+
     sinners: list
+    turn_order: list
+    opponents = None
 
     def get_lowest_hp(self):
         alive_sinners = self.get_alive_sinners()
@@ -359,9 +388,11 @@ class Team:
 
         return alive_sinners
 
-    def add_to_team(self, sinner: CombatStats):
-        self.sinners.append(sinner)
-        sinner.team = self
+    def add_to_team(self, sinners: list):
+        for sinner in sinners:
+            combatant = CombatStats(sinner)
+            self.sinners.append(combatant)
+            combatant.team = self
 
     def get_random(self, number: int, excludes: list = None):
         sinners = self.get_alive_sinners()
@@ -374,28 +405,48 @@ class Team:
 
         return sinners[:(number-len(sinners))]
 
+    def choose_skills(self):
+        reverse_opposing_turn_order: list = self.opponents.turn_order.copy()
+        reverse_opposing_turn_order.reverse()
+
+        targeting_order = []
+        for opponent in reverse_opposing_turn_order:
+            for skill_slot in range(len(opponent.skill_slots)):
+                targeting_order.append([opponent, skill_slot])
+
+        i = 0
+        for combatant in self.turn_order:
+            for skill_slot in range(len(combatant.skill_slots)):
+                combatant.choose_skill(skill_slot, targeting_order[i][0], targeting_order[i][1])
+                i += 1
+                if i >= len(targeting_order):
+                    i = 0
+
 
 class CombatSkill:
-    def __init__(self, skill: Skill, combatant: CombatStats, opponent: CombatStats):
+    def __init__(self, skill: Skill, combatant: CombatStats, opponent: CombatStats, targeted_slot: int):
         self.skill = skill
         self.combatant = combatant
         self.opponent = opponent
         self.coins = skill.coin_num
+        self.targeted_slot = targeted_slot
 
-        self.trigger_effect(EffectTrigger.COMBAT_START)
         self.base_damage_sources = list()
         self.phase_3_mult_bonus_sources = list()
         self.phase_3_coin_specific = list()
         self.specific_coin_power_bonus = list()
         self.effect_on_coin_damage = list()
-        self.repeat_coins = [0]*self.coins
+        self.repeat_coins = [0] * self.coins
         self.coin_effects = skill.coin_effects.copy()
+        self.trigger_effect(EffectTrigger.COMBAT_START)
+
 
     coins: int
     coin_effects: list
     skill: Skill
     combatant: CombatStats
     opponent: CombatStats
+    targeted_slot = -1
 
     # Damage and combat stats
     total_base_damage = 0
@@ -408,9 +459,12 @@ class CombatSkill:
     specific_coin_power_bonus = list()
     effect_on_coin_damage = list()
     is_critical = False
+    double_crit_chance = False
     spent_ammo = True
     skip_attack = False
     status_boost = 0  # How much bonus amount a status inflicted or applied will get
+    has_been_used = False
+    can_be_clashed = True
 
     def __str__(self):
         return self.skill.name
@@ -483,6 +537,18 @@ class CombatSkill:
 
         return [coin_power, is_heads]
 
+    def is_clashing(self):
+        # Check to see if clash is possible
+        if not (self.opponent.can_act() and self.can_be_clashed and self.opponent.skill_slots[self.targeted_slot].can_be_clashed):
+            return False
+
+        # Check if we out-speed and can redirect the skill or if the skill was targeting us in the first place
+        if self.combatant.speed > self.opponent.speed or \
+           self.opponent.skill_slots[self.targeted_slot].opponent == self.combatant and self.opponent.skill_slots[self.targeted_slot].targeted_slot == self.combatant.skill_slots.index(self):
+            return True
+
+        return False
+
     # Returns a list with the first element being the clash value and the second element being the detailed string
     def get_clash(self):
         bonus_sources = []  # List of Lists. 2nd List is string detailing source name and int of bonus amount
@@ -506,7 +572,7 @@ class CombatSkill:
         # Critical Check
         crit_chance = self.combatant.get_status_amount(StatusType.POISE)
         if crit_chance > 0:
-            if random.randrange(20) < crit_chance:
+            if random.randrange(20) < crit_chance * (2 if self.double_crit_chance else 1):
                 if configs.COMBAT_VERBOSE:
                     print("Critical!")
                 self.is_critical = True
@@ -514,69 +580,82 @@ class CombatSkill:
 
         # Strike with each coin
         prev_coin_power = 0
-        for coin in range(self.coins):
-            self.skip_attack = False
-            coin_bonus_sources = list()
-            self.trigger_coin_effect(EffectTrigger.BEFORE_HIT, coin)
-            if not self.skip_attack:
-                coin_flip = self.get_coin_power(coin, coin_bonus_sources)
-                base_value = self.get_skill_power(coin_bonus_sources) + coin_flip[0] + prev_coin_power
-                if prev_coin_power != 0 and configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
-                    coin_bonus_sources.append(["Previous Coins", prev_coin_power])
+        coin = 0
+        while coin < self.coins:
+            if self.opponent.hp > 0:
+                self.skip_attack = False
+                coin_bonus_sources = list()
+                self.trigger_coin_effect(EffectTrigger.BEFORE_HIT, coin)
+                if not self.skip_attack:
+                    coin_flip = self.get_coin_power(coin, coin_bonus_sources)
+                    base_value = self.get_skill_power(coin_bonus_sources) + coin_flip[0] + prev_coin_power
+                    if prev_coin_power != 0 and configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
+                        coin_bonus_sources.append(["Previous Coins", prev_coin_power])
 
-                prev_coin_power += coin_flip[0]
-                phase1_results = self.get_phase1_bonuses(clashes)
-                phase3_results = self.get_phase3_bonuses(coin)
-                phase4_results = self.get_phase4_bonuses()
+                    prev_coin_power += coin_flip[0]
+                    phase1_results = self.get_phase1_bonuses(clashes)
 
-                damage = math.floor(base_value * (phase1_results[0]/100) * (phase3_results[0]/100)) + phase4_results[0]
+                    self.trigger_coin_effect(EffectTrigger.BEFORE_DAMAGE, coin, coin_flip[1])
 
-                if configs.COMBAT_VERBOSE:
-                    if configs.SHOW_BONUSES:
-                        combat_str = f"{self.combatant.sinner.name} rolls {base_value} "
-                        if len(coin_bonus_sources) > 0:
-                            combat_str += f"({tools.format_sources(coin_bonus_sources)}) "
-                        combat_str += f"dealing {damage} damage"
-                        if phase1_results[0] != 100 or phase3_results[0] != 100 or phase4_results[0] != 0:
-                            combat_str += " ("
-                            if phase1_results[0] != 100:
-                                combat_str += f"Phase 1: {phase1_results[0]} ({tools.format_sources(phase1_results[1])}), "
-                            if phase3_results[0] != 100:
-                                combat_str += f"Phase 3: {phase3_results[0]} ({tools.format_sources(phase3_results[1])}), "
-                            if phase4_results[0] != 0:
-                                combat_str += f"Phase 4: {phase4_results[0]} ({tools.format_sources(phase4_results[1])})"
-                            else:
-                                combat_str = combat_str[:-2]
-                            combat_str += ")"
-                        combat_str += "."
-                        print(combat_str)
-                    else:
-                        print(f"{self.combatant.sinner.name} rolls {base_value} dealing {damage} damage.")
+                    phase3_results = self.get_phase3_bonuses(coin)
+                    phase4_results = self.get_phase4_bonuses(coin)
 
-                self.opponent.damage(damage)
+                    damage = math.floor(base_value * (phase1_results[0] / 100) * (phase3_results[0] / 100)) + \
+                             phase4_results[0]
 
-                # If heads
-                if coin_flip[1]:
-                    self.trigger_coin_effect(EffectTrigger.HEADS_HIT, coin)
+                    self.opponent.damage(damage)
+
+                    if configs.COMBAT_VERBOSE:
+                        if configs.SHOW_BONUSES:
+                            combat_str = f"{self.combatant.sinner.name} rolls {base_value} "
+                            if len(coin_bonus_sources) > 0:
+                                combat_str += f"({tools.format_sources(coin_bonus_sources)}) "
+                            combat_str += f"dealing {damage} damage"
+                            if phase1_results[0] != 100 or phase3_results[0] != 100 or phase4_results[0] != 0:
+                                combat_str += " ("
+                                if phase1_results[0] != 100:
+                                    combat_str += f"Phase 1: {phase1_results[0]} ({tools.format_sources(phase1_results[1])}), "
+                                if phase3_results[0] != 100:
+                                    combat_str += f"Phase 3: {phase3_results[0]} ({tools.format_sources(phase3_results[1])}), "
+                                if phase4_results[0] != 0:
+                                    combat_str += f"Phase 4: {phase4_results[0]} ({tools.format_sources(phase4_results[1])})"
+                                else:
+                                    combat_str = combat_str[:-2]
+                                combat_str += ")"
+                            combat_str += "."
+                            print(combat_str)
+                        else:
+                            print(f"{self.combatant.sinner.name} rolls {base_value} dealing {damage} damage.")
+
+                        # If heads
+                        if coin_flip[1]:
+                            self.trigger_coin_effect(EffectTrigger.HEADS_HIT, coin, coin_flip[1])
+                        else:
+                            self.trigger_coin_effect(EffectTrigger.TAILS_HIT, coin, coin_flip[1])
+
+                    for effect in self.effect_on_coin_damage:
+                        if effect[0] == coin:
+                            if effect[1] == CoinEffect.HEAL:
+                                heal_amount = math.floor(damage * (effect[2]/100))
+                                self.combatant.heal(heal_amount)
+                            elif effect[1] == CoinEffect.RAISE_STAGGER:
+                                stagger_amount = math.floor(damage * (effect[2] / 100))
+                                self.opponent.add_stagger_offset(stagger_amount)
+                            elif effect[1] == CoinEffect.LOWER_OWN_STAGGER:
+                                stagger_amount = -1 * math.floor(damage * (effect[2] / 100))
+                                self.combatant.add_stagger_offset(stagger_amount)
+                            elif effect[1] == CoinEffect.DEAL_PERCENT_DAMAGE:
+                                damage_amount = math.floor(damage * (effect[2]/100))
+                                if configs.COMBAT_VERBOSE:
+                                    print(f"{self.combatant.sinner.name} deals {damage_amount} extra damage.")
+                                self.opponent.hp -= damage_amount
+                                total_damage += damage_amount
+
+                    total_damage += damage
                 else:
-                    self.trigger_coin_effect(EffectTrigger.ON_HIT, coin)
+                    break
 
-                for effect in self.effect_on_coin_damage:
-                    if effect[0] == coin:
-                        if effect[1] == CoinEffect.HEAL:
-                            heal_amount = math.floor(damage * (effect[2]/100))
-                            self.combatant.heal(heal_amount)
-                        elif effect[1] == CoinEffect.RAISE_STAGGER:
-                            stagger_amount = math.floor(damage * (effect[2] / 100))
-                            self.opponent.add_stagger_offset(stagger_amount)
-                        elif effect[1] == CoinEffect.DEAL_PERCENT_DAMAGE:
-                            damage_amount = math.floor(damage * (effect[2]/100))
-                            if configs.COMBAT_VERBOSE:
-                                print(f"{self.combatant.sinner.name} deals {damage_amount} extra damage.")
-                            self.opponent.hp -= damage_amount
-                            total_damage += damage_amount
-
-                total_damage += damage
+            coin += 1
 
         if configs.COMBAT_VERBOSE:
             print(f"Total damage is {total_damage}, {self.opponent.sinner.name} is now at {self.opponent.hp} hp.")
@@ -629,12 +708,12 @@ class CombatSkill:
                 if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
                     phase_3_mult_sources.append([str(status.type), 10 * status.amount])
 
-            if status.type == StatusType.DAMAGE_DOWN:
+            elif status.type == StatusType.DAMAGE_DOWN:
                 phase_3_mult -= status.amount * 10
                 if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
                     phase_3_mult_sources.append([str(status.type), -10 * status.amount])
 
-        # Check for non-coin status bonuses on attacker
+        # Check for non-coin status bonuses on defender
         for status in self.opponent.statuses:
             if (status.type == StatusType.SLASH_FRAGILITY and self.skill.type == 0) or \
                     (status.type == StatusType.PIERCE_FRAGILITY and self.skill.type == 1) or \
@@ -643,10 +722,17 @@ class CombatSkill:
                 phase_3_mult += status.amount * 10
                 if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
                     phase_3_mult_sources.append([str(status.type), 10 * status.amount])
-            elif status.type == StatusType.PROTECTION:
+            elif (status.type == StatusType.SLASH_PROTECTION and self.skill.type == 0) or \
+                 (status.type == StatusType.PIERCE_PROTECTION and self.skill.type == 1) or \
+                 (status.type == StatusType.BLUNT_PROTECTION and self.skill.type == 2) or \
+                 (status.type == StatusType.PROTECTION):
                 phase_3_mult -= status.amount * 10
                 if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
                     phase_3_mult_sources.append([str(status.type), -10 * status.amount])
+            elif status.type == StatusType.GAZE and (self.skill.type == 1 or self.skill.type == 2):
+                phase_3_mult += status.amount * 20
+                if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
+                    phase_3_mult_sources.append([str(status.type), 20 * status.amount])
 
         if len(self.phase_3_mult_bonus_sources) > 0:
             phase_3_mult += self.phase_3_mult_bonus
@@ -662,7 +748,7 @@ class CombatSkill:
         return [phase_3_mult, phase_3_mult_sources]
 
     # Returns a List with the first element being the bonus and the second element being a detailed list of sources
-    def get_phase4_bonuses(self):
+    def get_phase4_bonuses(self, coin):
         phase_4_damage = 0
         phase_4_damage_sources = list()
 
@@ -675,6 +761,13 @@ class CombatSkill:
 
                 self.opponent.lower_status_count(status.type)
 
+        for effect in self.effect_on_coin_damage:
+            if effect[0] == coin:
+                if effect[1] == CoinEffect.PHASE_4_DAMAGE:
+                    phase_4_damage += effect[2]
+                    if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
+                        phase_4_damage_sources.append(["Skill Effect", effect[2]])
+
         return [phase_4_damage, phase_4_damage_sources]
 
     def trigger_effect(self, trigger: EffectTrigger):
@@ -682,18 +775,29 @@ class CombatSkill:
             if effect.trigger == trigger:
                 self.do_effect(effect)
 
-    def trigger_coin_effect(self, trigger: EffectTrigger, coin: int):
+    def trigger_coin_effect(self, trigger: EffectTrigger, coin: int, heads=False):
         if len(self.coin_effects) > coin:
             for effect in self.coin_effects[coin]:
-                if effect.trigger == trigger or (effect.trigger == EffectTrigger.ON_HIT and trigger == EffectTrigger.HEADS_HIT):
-                    self.do_effect(effect, coin)
+                if effect.trigger == trigger or (effect.trigger == EffectTrigger.ON_HIT and trigger == EffectTrigger.HEADS_HIT) or (effect.trigger == EffectTrigger.ON_HIT and trigger == EffectTrigger.TAILS_HIT):
+                    self.do_effect(effect, coin, heads)
 
-    def do_effect(self, effect, coin=-1):
+    def target_random(self):
+        target_selection = self.combatant.team.get_alive_sinners() + self.opponent.team.get_alive_sinners()
+        random.shuffle(target_selection)
+        self.can_be_clashed = False
+
+        if target_selection[0] != self.combatant:
+            return target_selection[0]
+        else:
+            return target_selection[1]
+
+    def do_effect(self, effect, coin=-1, heads=False):
         conditions_met = True
 
         for condition in effect.condition:
             if not (condition.condition == EffectCondition.NO_CONDITION or
                     (condition.condition == EffectCondition.TARGET_HAS_STATUS_OF_AMOUNT and self.opponent.get_status_amount(condition.condition_status) >= condition.condition_amount) or
+                    (condition.condition == EffectCondition.TARGET_HAS_STATUS_OF_COUNT and self.opponent.get_status_count(condition.condition_status) >= condition.condition_amount) or
                     (condition.condition == EffectCondition.TARGET_HAS_LESS_STATUS_OF_AMOUNT and self.opponent.get_status_amount(condition.condition_status) < condition.condition_amount) or
                     (condition.condition == EffectCondition.SPEED_IS_HIGHER and self.combatant.speed > self.opponent.speed) or
                     (condition.condition == EffectCondition.TARGET_ABOVE_HP and (self.opponent.hp / self.opponent.sinner.hp) * 100 > condition.condition_amount) or
@@ -703,8 +807,11 @@ class CombatSkill:
                     (condition.condition == EffectCondition.TARGET_TAKEN_DAMAGE and self.opponent.damaged_this_turn) or
                     (condition.condition == EffectCondition.SPEED_AT_LEAST_X and self.combatant.speed >= condition.condition_amount) or
                     (condition.condition == EffectCondition.SELF_HAS_STATUS_OF_AMOUNT and self.combatant.get_status_amount(condition.condition_status) >= condition.condition_amount) or
+                    (condition.condition == EffectCondition.SELF_HAS_STATUS_BELOW_COUNT and self.combatant.get_status_count(condition.condition_status) < condition.condition_amount) or
                     (condition.condition == EffectCondition.TOOK_NO_DAMAGE_THIS_TURN and not self.combatant.damaged_this_turn) or
-                    (condition.condition == EffectCondition.SPEND_CHARGE and self.combatant.spend_charge(effect.amount)) or
+                    (condition.condition == EffectCondition.SPEND_CHARGE and self.combatant.spend_charge(condition.condition_amount)) or
+                    (condition.condition == EffectCondition.ON_COIN and coin + 1 == condition.condition_amount) or
+                    (condition.condition == EffectCondition.GOT_HEADS and heads) or
                     (condition.condition == EffectCondition.ON_CRIT and self.is_critical)):
                 conditions_met = False
                 break
@@ -741,11 +848,21 @@ class CombatSkill:
                     print("Warning: Coin specific trigger not assigned to a coin.")
                 else:
                     self.effect_on_coin_damage.append([coin, CoinEffect.HEAL, effect.amount])
+            elif effect.effect_detail == EffectDetails.ADDED_DAMAGE:
+                if coin == -1:
+                    print("Warning: Coin specific trigger not assigned to a coin.")
+                else:
+                    self.effect_on_coin_damage.append([coin, CoinEffect.PHASE_4_DAMAGE, effect.amount])
             elif effect.effect_detail == EffectDetails.RAISE_STAGGER_BY_DAMAGE:
                 if coin == -1:
                     print("Warning: Coin specific trigger not assigned to a coin.")
                 else:
                     self.effect_on_coin_damage.append([coin, CoinEffect.RAISE_STAGGER, effect.amount])
+            elif effect.effect_detail == EffectDetails.LOWER_SELF_STAGGER_BY_DAMAGE:
+                if coin == -1:
+                    print("Warning: Coin specific trigger not assigned to a coin.")
+                else:
+                    self.effect_on_coin_damage.append([coin, CoinEffect.LOWER_OWN_STAGGER, effect.amount])
             elif effect.effect_detail == EffectDetails.DEAL_PERCENT_BONUS_DAMAGE:
                 if coin == -1:
                     print("Warning: Coin specific trigger not assigned to a coin.")
@@ -792,6 +909,17 @@ class CombatSkill:
                 self.combatant.hp -= effect.amount
                 if configs.COMBAT_VERBOSE:
                     print(f"{self.combatant.sinner.name} self inflicts {effect.amount} damage.")
+            elif effect.effect_detail == EffectDetails.DOUBLE_CRIT_CHANCE:
+                self.double_crit_chance = True
+            elif effect.effect_detail == EffectDetails.TARGET_RANDOM:
+                self.target_random()
+            elif effect.effect_detail == EffectDetails.REMOVE_STATUS:
+                self.combatant.remove_status(effect.status)
+            elif effect.effect_detail == EffectDetails.LOSE_PERCENT_HP:
+                damage_amount = math.floor(self.combatant.hp * effect.amount)
+                self.combatant.hp -= damage_amount
+                if configs.COMBAT_VERBOSE:
+                    print(f"{self.combatant} hurts themself for {damage_amount}")
             else:
                 print("Warning: Skill effect not implemented.")
 

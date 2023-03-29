@@ -84,3 +84,7 @@ class StatusType:
     NAILS = StatusDef("Nails", end_of_turn=EndOfTurn.HALVE)
     PLUS_COIN_DROP = StatusDef("Plus Coin Drop", end_of_turn=EndOfTurn.REMOVE)
     CHARGE = StatusDef("Charge", end_of_turn=EndOfTurn.LOWER_COUNT)
+    SLASH_PROTECTION = StatusDef("Slash Protection", end_of_turn=EndOfTurn.REMOVE)
+    PIERCE_PROTECTION = StatusDef("Pierce Protection", end_of_turn=EndOfTurn.REMOVE)
+    BLUNT_PROTECTION = StatusDef("Blunt Protection", end_of_turn=EndOfTurn.REMOVE)
+    GAZE = StatusDef("Gaze", end_of_turn=EndOfTurn.REMOVE)  # TODO: Implement SP Gain

@@ -10,7 +10,21 @@ from operator import itemgetter
 from sinners import sinners
 
 if __name__ == '__main__':
-    #combat([sinners["Shi Section 5 Don Quixote"], sinners["LCB Sinner Meursault"]])
+
+    #combat([sinners["W Corp. Cleanup Agent Don Quixote"]], [sinners["LCB Sinner Meursault"]])
+
+
+    """wins = [0,0]
+    for i in range(10000):
+        fight_winner = combat([sinners["Blade Lineage Salsu Yi Sang"], sinners["Blade Lineage Salsu Yi Sang"],
+                sinners["Blade Lineage Salsu Yi Sang"]],
+               [sinners["Kurokumo Wakashu Ryoshu"], sinners["Kurokumo Henchwoman Rodion"],
+                sinners["Kurokumo Wakashu Hong Lu"]])
+
+        wins[fight_winner] += 1
+
+    print(wins)"""
+
 
     combatant_list = list(sinners.keys())
 
@@ -31,7 +45,7 @@ if __name__ == '__main__':
         num_of_fights += 1
 
         while wins[0] < configs.FIRST_TO_X_WINS and wins[1] < configs.FIRST_TO_X_WINS:
-            fight_winner = combat([sinners[match_up[0]], sinners[match_up[1]]])
+            fight_winner = combat([sinners[match_up[0]]], [sinners[match_up[1]]])
 
             wins[fight_winner] += 1
 
@@ -84,11 +98,7 @@ if __name__ == '__main__':
         print(stats_str)
         print(stats_str2)
 
-
-
-
     for fight in ordered_fights_list:
         print(fight[1])
-
 
     print(total_stats_str)

@@ -10,6 +10,8 @@ class EffectTrigger(Enum):
     BEFORE_HIT = 5
     BEFORE_ATTACK = 6
     TAILS_HIT = 7
+    ClASH_LOSE = 8
+    BEFORE_DAMAGE = 9
 
 
 class EffectDetails(Enum):
@@ -37,6 +39,12 @@ class EffectDetails(Enum):
     SPEND_AMMO = 21
     LOSE_HP = 22
     DEAL_PERCENT_BONUS_DAMAGE = 23
+    DOUBLE_CRIT_CHANCE = 24
+    LOWER_SELF_STAGGER_BY_DAMAGE = 25
+    TARGET_RANDOM = 26
+    REMOVE_STATUS = 27
+    ADDED_DAMAGE = 28
+    LOSE_PERCENT_HP = 29
 
 
 class EffectCondition(Enum):
@@ -54,9 +62,15 @@ class EffectCondition(Enum):
     SELF_BELOW_HP = 11
     TARGET_HAS_LESS_STATUS_OF_AMOUNT = 12
     SPEND_CHARGE = 13
+    TARGET_HAS_STATUS_OF_COUNT = 14
+    SELF_HAS_STATUS_BELOW_COUNT = 15
+    ON_COIN = 16
+    GOT_HEADS = 17
 
 class CoinEffect(Enum):
     HEAL = 0
     RAISE_STAGGER = 1
     DEAL_PERCENT_DAMAGE = 2
+    LOWER_OWN_STAGGER = 3
+    PHASE_4_DAMAGE = 4
 

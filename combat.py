@@ -8,37 +8,55 @@ from statuses import Status, StatusType
 from tools import format_sources
 
 
-def combat(fighting_sinners):
+def combat(fighters_team_1: list, fighters_team_2: list):
 
-    combatants = [CombatStats(fighting_sinners[0]),
-                  CombatStats(fighting_sinners[1])]
+    teams = [Team(), Team()]
 
-    team0 = Team()
-    team1 = Team()
-
-    team0.add_to_team(combatants[0])
-    team1.add_to_team(combatants[1])
+    teams[0].add_to_team(fighters_team_1)
+    teams[1].add_to_team(fighters_team_2)
+    teams[0].opponents = teams[1]
+    teams[1].opponents = teams[0]
 
     if configs.COMBAT_VERBOSE:
-        print(combatants[0].sinner.name + " vs " + combatants[1].sinner.name + "\n")
+        print(f"{teams[0]} vs {teams[1]}\n")
 
-    while combatants[0].hp > 0 and combatants[1].hp > 0:
-        i = 0
+    turn = 0
+    while len(teams[0].get_alive_sinners()) > 0 and len(teams[1].get_alive_sinners()) > 0:
+        turn += 1
+        if configs.COMBAT_VERBOSE:
+            print(f"Turn {turn}")
+        combatants = teams[0].get_alive_sinners() + teams[1].get_alive_sinners()
+        random.shuffle(combatants)
+
         for combatant in combatants:
             combatant.speed_roll()
-            combatant.choose_skills([combatants[(i+1)%2]])
-            i += 1
+        combatants.sort(key=lambda x: x.speed, reverse=True)
 
-        if combatants[0].stagger_level > 0:
-            if configs.COMBAT_VERBOSE:
-                print(f"{combatants[1].sinner.name} strikes ones sided with {combatants[1].chosen_skill[0].skill.name}")
-            combatants[1].chosen_skill[0].strike()
-        elif combatants[1].stagger_level > 0:
-            if configs.COMBAT_VERBOSE:
-                print(f"{combatants[0].sinner.name} strikes ones sided with {combatants[0].chosen_skill[0].skill.name}")
-            combatants[0].chosen_skill[0].strike()
-        else:
-            clash(combatants[0], 0, combatants[1], 0)
+        teams[0].turn_order = []
+        teams[1].turn_order = []
+        for combatant in combatants:
+            if combatant.team == teams[0]:
+                teams[0].turn_order.append(combatant)
+            else:
+                teams[1].turn_order.append(combatant)
+
+        teams[0].choose_skills()
+        teams[1].choose_skills()
+
+        for combatant in combatants:
+            for skill in combatant.skill_slots:
+                if combatant.can_act() and not skill.has_been_used and skill.opponent.hp > 0:
+                    skill.has_been_used = True
+                    skill.trigger_effect(EffectTrigger.ON_USE)
+
+                    if skill.is_clashing():
+                        skill.opponent.skill_slots[skill.targeted_slot].has_been_used = True
+                        skill.opponent.skill_slots[skill.targeted_slot].trigger_effect(EffectTrigger.ON_USE)
+                        clash(skill.combatant, skill.combatant.skill_slots.index(skill), skill.opponent, skill.targeted_slot)
+                    else:
+                        if configs.COMBAT_VERBOSE:
+                            print(f"{skill.combatant.sinner.name} strikes one-sided against {skill.opponent.sinner.name} with {skill.skill.name}")
+                            skill.strike()
 
         if configs.COMBAT_VERBOSE:
             print("")
@@ -46,31 +64,28 @@ def combat(fighting_sinners):
         for combatant in combatants:
             combatant.end_of_turn()
 
-    if combatants[0].hp > 0:
+    if len(teams[0].get_alive_sinners()) > 0:
         winner = 0
         loser = 1
     else:
         winner = 1
         loser = 0
 
-    print(f"{combatants[winner].sinner.name} beats {combatants[loser].sinner.name} with {combatants[winner].hp}"
-          f" hp remaining.")
+    if configs.SHOW_BATTLE_RESULTS:
+        print(f"{teams[0]} beat {teams[1]}")
 
     return winner
 
 
 def clash(combatant1, skill1, combatant2, skill2):
     combatants_info = [combatant1, combatant2]
-    skills = [combatant1.chosen_skill[skill1], combatant2.chosen_skill[skill2]]
+    skills = [combatant1.skill_slots[skill1], combatant2.skill_slots[skill2]]
 
     if configs.COMBAT_VERBOSE:
         print(f"{combatant1.sinner.name} (speed {combatant1.speed}) using {skills[0]} ({skills[0].skill.base} +{skills[0].skill.coin_bonus}) vs "
               f"{combatant2.sinner.name} (speed {combatant2.speed}) using {skills[1]} ({skills[1].skill.base} +{skills[1].skill.coin_bonus})")
 
     clashes = 0
-
-    for skill in skills:
-        skill.trigger_effect(EffectTrigger.ON_USE)
 
     while skills[0].coins > 0 and skills[1].coins > 0:
         clashes += 1
@@ -116,6 +131,7 @@ def clash(combatant1, skill1, combatant2, skill2):
                 print(combatants_info[1].sinner.name + " wins clash")
 
         skills[attacker].trigger_effect(EffectTrigger.ClASH_WIN)
+        skills[defender].trigger_effect(EffectTrigger.ClASH_LOSE)
         skills[attacker].strike(clashes)
 
 
