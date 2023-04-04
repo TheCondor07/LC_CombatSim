@@ -1,7 +1,5 @@
-# This is a sample Python script.
+# Check configs.py for options
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import random
 import configs
 from combat import combat
@@ -11,8 +9,10 @@ from sinners import sinners
 
 if __name__ == '__main__':
 
+    # For one off Fights
     #combat([sinners["The One Who Grips Faust"]], [sinners["LCB Sinner Meursault"]])
 
+    # For test a lot of one specific fight
     """wins = [0,0]
     for i in range(1000):
         fight_winner = combat([sinners["R Corp. 4th Pack Rabbit Heathcliff"]],
@@ -60,6 +60,7 @@ if __name__ == '__main__':
         total_stats_str = "\nTotal Stats:"
         num_of_indv_fights = (len(combatant_list)-1)
         ordered_fights_list = list()
+        fighter_order_list = ""
         for combatant_stats in final_list:
             total_stats_str += f"\n{sinners[combatant_stats[1]].name} ({combatant_stats[0]}-{num_of_indv_fights - combatant_stats[0]})"
 
@@ -71,6 +72,7 @@ if __name__ == '__main__':
             for fight in temp_list:
                 fights.remove(fight)
 
+            fighter_order_list += f"{sinners[combatant_stats[1]].name}\n"
             stats_str = f"{sinners[combatant_stats[1]].name}: "
             stats_str2 = f"Opponent: "
             stats_str += ("\t" * (len(final_list) - len(temp_list) + 1))
@@ -103,3 +105,5 @@ if __name__ == '__main__':
             print(fight[1])
 
         print(total_stats_str)
+        print("")
+        print(fighter_order_list)
