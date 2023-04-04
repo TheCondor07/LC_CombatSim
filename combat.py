@@ -9,7 +9,6 @@ from tools import format_sources
 
 
 def combat(fighters_team_1: list, fighters_team_2: list):
-
     teams = [Team(), Team()]
 
     teams[0].add_to_team(fighters_team_1)
@@ -20,9 +19,23 @@ def combat(fighters_team_1: list, fighters_team_2: list):
     if configs.COMBAT_VERBOSE:
         print(f"{teams[0]} vs {teams[1]}\n")
 
+    second_skill_slot = 0
+    third_skill_slot = 0
+
     turn = 0
+    if configs.GAIN_SKILL_SLOTS:
+        second_skill_slot = random.randrange(2, 6)
+        third_skill_slot = random.randrange(7, 11)
+
     while len(teams[0].get_alive_sinners()) > 0 and len(teams[1].get_alive_sinners()) > 0:
         turn += 1
+        if configs.GAIN_SKILL_SLOTS:
+            if turn == second_skill_slot or turn == third_skill_slot:
+                if configs.COMBAT_VERBOSE:
+                    print("Gain Skill slots")
+                teams[0].add_skill_slot()
+                teams[1].add_skill_slot()
+
         if configs.COMBAT_VERBOSE:
             print(f"Turn {turn}")
         combatants = teams[0].get_alive_sinners() + teams[1].get_alive_sinners()
@@ -58,8 +71,8 @@ def combat(fighters_team_1: list, fighters_team_2: list):
                             print(f"{skill.combatant.sinner.name} strikes one-sided against {skill.opponent.sinner.name} with {skill.skill.name}")
                             skill.strike()
 
-        if configs.COMBAT_VERBOSE:
-            print("")
+                    if configs.COMBAT_VERBOSE:
+                        print("")
 
         for combatant in combatants:
             combatant.end_of_turn()
@@ -72,7 +85,7 @@ def combat(fighters_team_1: list, fighters_team_2: list):
         loser = 0
 
     if configs.SHOW_BATTLE_RESULTS:
-        print(f"{teams[0]} beat {teams[1]}")
+        print(f"{teams[winner]} beat {teams[loser]}")
 
     return winner
 
@@ -114,21 +127,28 @@ def clash(combatant1, skill1, combatant2, skill2):
             print(combat_str)
 
         if clash_result[0][0] > clash_result[1][0]:
+            if(len(skills[1].coin_effects)) > 0:
+                skills[1].coin_effects.pop(0)
             skills[1].coins -= 1
         if clash_result[0][0] < clash_result[1][0]:
+            if (len(skills[0].coin_effects)) > 0:
+                skills[0].coin_effects.pop(0)
             skills[0].coins -= 1
 
     if combatants_info[0].hp > 0 and combatants_info[1].hp > 0:
         if skills[0].coins > 0:
             attacker = 0
             defender = 1
-            if configs.COMBAT_VERBOSE:
-                print(combatants_info[0].sinner.name + " wins clash")
+
         else:
             attacker = 1
             defender = 0
-            if configs.COMBAT_VERBOSE:
-                print(combatants_info[1].sinner.name + " wins clash")
+
+        if configs.GAIN_LOSE_SANITY:
+            combatants_info[attacker].gain_lose_sp(round(10 * (1 + clashes * 0.25)))
+
+        if configs.COMBAT_VERBOSE:
+            print(combatants_info[attacker].sinner.name + " wins clash")
 
         skills[attacker].trigger_effect(EffectTrigger.ClASH_WIN)
         skills[defender].trigger_effect(EffectTrigger.ClASH_LOSE)

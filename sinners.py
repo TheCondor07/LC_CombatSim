@@ -8,7 +8,7 @@ sinners = {
                                  [Skill("Deflect", Sin.GLOOM, 0, 3, 7, 1, [], [[Effect(EffectTrigger.HEADS_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.SINKING)]]),
                                   Skill("End-stop Stab", Sin.ENVY, 1, 4, 4, 2, [], [[], [Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.SINKING),
                                                                                Effect(EffectTrigger.ON_HIT, EffectDetails.APPLY_STATUS_COUNT, 1, status=StatusType.SINKING)]]),
-                                  Skill("Enjamb", Sin.SLOTH, 0, 6, 1, 3, [], [])]),  # TODO: Implement SP Effect
+                                  Skill("Enjamb", Sin.SLOTH, 0, 6, 1, 3, [], [[], [], [Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 1, status=StatusType.FRAGILE, condition=[Condition(EffectCondition.TARGET_HAS_LESS_THAN_SP, condition_amount=0)])]])]),
     "LCB Sinner Sinclair": Sinner("LCB Sinner Sinclair", 121, 3, 7, 26, 38, [-25, 50, 0], [70, 40, 20],
                                   [Skill("Downward Swing", Sin.PRIDE, 0, 3, 7, 1, [], [[Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.RUPTURE)]]),
                                    Skill("Halberd Combo", Sin.WRATH, 0, 4, 2, 3, [Effect(EffectTrigger.ClASH_WIN, EffectDetails.RAISE_ATTACK_DAMAGE_MULT, 30)], []),
@@ -22,8 +22,8 @@ sinners = {
                                 [Skill("Strike Down", Sin.GLUTTONY, 0, 3, 7, 1, [], [[Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.BLEED)]]),
                                  Skill("Axe Combo", Sin.PRIDE, 0, 4, 4, 2, [], [[Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.BLEED)],
                                                                      [Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.BLEED)]]),
-                                 Skill("Slay", Sin.WRATH, 0, 2, 2, 4, [], [[], [], [], [Effect(
-                                     EffectTrigger.BEFORE_HIT, EffectDetails.COIN_DMG_MULT, 20, condition=[Condition(EffectCondition.TARGET_HAS_STATUS_OF_AMOUNT, condition_status=StatusType.BLEED, condition_amount=6)])]])]),  # TODO: Implement SP Effect
+                                 Skill("Slay", Sin.WRATH, 0, 2, 2, 4, [Effect(EffectTrigger.ON_USE, EffectDetails.SKILL_POWER, 1, condition=[Condition(EffectCondition.SELF_HAS_LESS_THAN_SP, condition_amount=0)])],
+                                       [[], [], [], [Effect(EffectTrigger.BEFORE_HIT, EffectDetails.COIN_DMG_MULT, 20, condition=[Condition(EffectCondition.TARGET_HAS_STATUS_OF_AMOUNT, condition_status=StatusType.BLEED, condition_amount=6)])]])]),
     "LCB Sinner Outis": Sinner("LCB Sinner Outis", 120, 3, 7, 26, 38, [-25, 0, 50], [70, 40, 20],
                                [Skill("Pulled Blade", Sin.SLOTH, 1, 3, 2, 3, [], [[Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.RUPTURE)]]),
                                 Skill("Backslash", Sin.PRIDE, 0, 4, 4, 2, [], [[Effect(EffectTrigger.BEFORE_HIT, EffectDetails.COIN_DMG_MULT, 20, condition=[Condition(EffectCondition.SPEED_IS_HIGHER)])],
@@ -89,7 +89,8 @@ sinners = {
                                                                                           [Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.SINKING),
                                                                                            Effect(EffectTrigger.HEADS_HIT, EffectDetails.APPLY_STATUS_COUNT, 1, status=StatusType.SINKING)],
                                                                                           [Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.SINKING)]]),
-                                      Skill("Piñata Party", Sin.GLOOM, 2, 8, 11, 1, [], [[Effect(EffectTrigger.HEADS_HIT, EffectDetails.RAISE_STAGGER_BY_DAMAGE, 50)]])]),  # TODO: SP Effect
+                                      Skill("Piñata Party", Sin.GLOOM, 2, 8, 11, 1, [Effect(EffectTrigger.ON_USE, EffectDetails.NEG_SP_TO_CRIT, 0)],
+                                            [[Effect(EffectTrigger.HEADS_HIT, EffectDetails.LOWER_SELF_STAGGER_BY_DAMAGE, 50)]])]),
     "Seven Section 6 Ryoshu": Sinner("Seven Section 6 Ryoshu", 126, 3, 7, 27, 40, [-25, 0, 50], [70, 40, 20],
                                [Skill("Slash", Sin.SLOTH, 2, 4, 6, 1, [], [[Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.RUPTURE)]]),
                                 Skill("Upper Slash", Sin.PRIDE, 1, 4, 12, 1, [Effect(EffectTrigger.ON_USE, EffectDetails.SKILL_POWER, 2, condition=[Condition(EffectCondition.TARGET_HAS_STATUS_OF_AMOUNT, condition_amount=1, condition_status=StatusType.SLASH_FRAGILITY)]),
@@ -183,7 +184,8 @@ sinners = {
                                  [Skill("Gawky Nailing", Sin.GLOOM, 1, 3, 4, 2, [], [[Effect(EffectTrigger.HEADS_HIT, EffectDetails.APPLY_STATUS_COUNT_NEXT_TURN, 1, status=StatusType.NAILS),
                                                                                       Effect(EffectTrigger.TAILS_HIT, EffectDetails.INFLICT_STATUS, 1, status=StatusType.BLEED)],
                                                                                      [Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 1, status=StatusType.BLEED)]]),
-                                  Skill("Puri...fy!", Sin.ENVY, 2, 6, 8, 1, [], [[Effect(EffectTrigger.HEADS_HIT, EffectDetails.INFLICT_STATUS_NEXT_TURN, 2, status=StatusType.PLUS_COIN_DROP)]]),  # TODO: Clash Win Heals SP
+                                  Skill("Puri...fy!", Sin.ENVY, 2, 6, 8, 1, [Effect(EffectTrigger.ClASH_WIN, EffectDetails.HEAL_SP, 5)],
+                                        [[Effect(EffectTrigger.HEADS_HIT, EffectDetails.INFLICT_STATUS_NEXT_TURN, 2, status=StatusType.PLUS_COIN_DROP)]]),
                                   Skill("Infirm Retribution", Sin.SLOTH, 2, 4, 4, 3, [], [[Effect(EffectTrigger.HEADS_HIT, EffectDetails.DEAL_PERCENT_BONUS_DAMAGE, 10)],
                                                                                           [Effect(EffectTrigger.HEADS_HIT, EffectDetails.DEAL_PERCENT_BONUS_DAMAGE, 10)],
                                                                                           [Effect(EffectTrigger.HEADS_HIT, EffectDetails.DEAL_PERCENT_BONUS_DAMAGE, 10)]])]),
@@ -315,12 +317,13 @@ sinners = {
                                                                                  [Effect(EffectTrigger.BEFORE_HIT, EffectDetails.DEAL_PERCENT_BONUS_DAMAGE, 30, condition=[Condition(EffectCondition.TARGET_HAS_STATUS_OF_AMOUNT, condition_amount=1, condition_status=StatusType.RUPTURE)])],
                                                                                  [Effect(EffectTrigger.HEADS_HIT, EffectDetails.HEAL_FOR_DAMAGE, 100)]])]),
     "The One Who Grips Faust": Sinner("The One Who Grips Faust", 134, 4, 7, 31, 39, [50, 0, -25], [70, 40, 20],
-                                 [Skill("Cackle", Sin.ENVY, 1, 4, 3, 2, [], [[Effect(EffectTrigger.ON_HIT, EffectDetails.APPLY_STATUS_COUNT, 1, status=StatusType.NAILS)],  # TODO: SP Damage Effect
-                                                                             [Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.BLEED)]]),
+                                 [Skill("Cackle", Sin.ENVY, 1, 4, 3, 2, [Effect(EffectTrigger.ClASH_WIN, EffectDetails.TARGET_LOSE_SP, 3)],
+                                        [[Effect(EffectTrigger.ON_HIT, EffectDetails.APPLY_STATUS_COUNT, 1, status=StatusType.NAILS)],
+                                         [Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS, 2, status=StatusType.BLEED)]]),
                                   Skill("The Gripping", Sin.LUST, 1, 4, 4, 3, [], [[], [Effect(EffectTrigger.ON_HIT, EffectDetails.APPLY_STATUS_COUNT, 3, status=StatusType.NAILS)],
                                                                                    [Effect(EffectTrigger.HEADS_HIT, EffectDetails.INFLICT_STATUS_NEXT_TURN, 1, status=StatusType.PARALYZE),
                                                                                     Effect(EffectTrigger.ON_HIT, EffectDetails.INFLICT_STATUS_NEXT_TURN, 1, status=StatusType.GAZE)]]),
-                                  Skill("Execution", Sin.PRIDE, 2, 6, 2, 3, [], [[Effect(EffectTrigger.ON_HIT, EffectDetails.APPLY_STATUS_COUNT, 2, status=StatusType.NAILS)],
+                                  Skill("Execution", Sin.PRIDE, 2, 6, 2, 3, [], [[Effect(EffectTrigger.ON_HIT, EffectDetails.APPLY_STATUS_COUNT, 2, status=StatusType.NAILS)], # TODO: Kill effect
                                                                                  [Effect(EffectTrigger.HEADS_HIT, EffectDetails.APPLY_STATUS_COUNT, 2, status=StatusType.NAILS)],
                                                                                  [Effect(EffectTrigger.BEFORE_HIT, EffectDetails.COIN_DMG_MULT, 50, condition=[Condition(EffectCondition.TARGET_HAS_STATUS_OF_COUNT, condition_amount=5, condition_status=StatusType.NAILS)])]])]),
     "W Corp. Cleanup Agent Don Quixote": Sinner("W Corp. Cleanup Agent Don Quixote", 148, 3, 6, 28, 38, [0, -25, 50], [70, 40, 20],

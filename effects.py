@@ -45,6 +45,9 @@ class EffectDetails(Enum):
     REMOVE_STATUS = 27
     ADDED_DAMAGE = 28
     LOSE_PERCENT_HP = 29
+    NEG_SP_TO_CRIT = 30
+    HEAL_SP = 31
+    TARGET_LOSE_SP = 32
 
 
 class EffectCondition(Enum):
@@ -66,6 +69,8 @@ class EffectCondition(Enum):
     SELF_HAS_STATUS_BELOW_COUNT = 15
     ON_COIN = 16
     GOT_HEADS = 17
+    TARGET_HAS_LESS_THAN_SP = 18
+    SELF_HAS_LESS_THAN_SP = 19
 
 class CoinEffect(Enum):
     HEAL = 0

@@ -314,6 +314,17 @@ class CombatStats:
             if configs.COMBAT_VERBOSE:
                 print(f"{self.sinner.name} heals for {self.hp - old_hp}")
 
+    def gain_lose_sp(self, sp):
+        old_sp = self.sp
+        self.sp = max(min(self.sp + sp, 45), -45)
+
+        if self.sp != old_sp:
+            if configs.COMBAT_VERBOSE:
+                if sp < 0:
+                    print(f"{self.sinner.name} loses {old_sp - self.sp} sp (now {self.sp})")
+                else:
+                    print(f"{self.sinner.name} gains {self.sp - old_sp} sp (now {self.sp})")
+
     def add_stagger_offset(self, amount):
         self.stagger_threshold_offset = max(min(self.stagger_threshold_offset + amount, self.hp), 0)
 
@@ -360,10 +371,12 @@ class Team:
     def get_lowest_hp(self):
         alive_sinners = self.get_alive_sinners()
         random.shuffle(alive_sinners)
+        lowest = None
 
-        lowest = alive_sinners[0]
-        for sinner in alive_sinners[1:]:
-            if sinner.hp < lowest.hp:
+        for sinner in alive_sinners:
+            if lowest is None:
+                lowest = sinner
+            elif sinner.hp < lowest.hp:
                 lowest = sinner
 
         return lowest
@@ -371,9 +384,11 @@ class Team:
     def get_slowest(self):
         alive_sinners = self.get_alive_sinners()
         random.shuffle(alive_sinners)
+        slowest = None
 
-        slowest = alive_sinners[0]
-        for sinner in alive_sinners[1:]:
+        for sinner in alive_sinners:
+            if slowest is None:
+                slowest = sinner
             if sinner.speed < slowest.speed:
                 slowest = sinner
 
@@ -422,6 +437,29 @@ class Team:
                 if i >= len(targeting_order):
                     i = 0
 
+    def add_skill_slot(self):
+        sinners = self.get_alive_sinners()
+        random.shuffle(sinners)
+        chosen_sinner = None
+        staggered_sinner = None
+
+        for sinner in sinners:
+            if sinner.stagger_level > 0:
+                if staggered_sinner is None:
+                    staggered_sinner = sinner
+                elif len(staggered_sinner.skill_slots) > len(sinner.skill_slots):
+                    staggered_sinner = sinner
+            else:
+                if chosen_sinner is None:
+                    chosen_sinner = sinner
+                elif len(chosen_sinner.skills_slots) > len(sinner.skill_slots):
+                    chosen_sinner = sinner
+
+        if chosen_sinner is None:
+            staggered_sinner.gain_skill_slot()
+        else:
+            chosen_sinner.gain_skill_slot()
+
 
 class CombatSkill:
     def __init__(self, skill: Skill, combatant: CombatStats, opponent: CombatStats, targeted_slot: int):
@@ -439,7 +477,6 @@ class CombatSkill:
         self.repeat_coins = [0] * self.coins
         self.coin_effects = skill.coin_effects.copy()
         self.trigger_effect(EffectTrigger.COMBAT_START)
-
 
     coins: int
     coin_effects: list
@@ -465,6 +502,7 @@ class CombatSkill:
     status_boost = 0  # How much bonus amount a status inflicted or applied will get
     has_been_used = False
     can_be_clashed = True
+    crit_bonus = 0
 
     def __str__(self):
         return self.skill.name
@@ -544,7 +582,8 @@ class CombatSkill:
 
         # Check if we out-speed and can redirect the skill or if the skill was targeting us in the first place
         if self.combatant.speed > self.opponent.speed or \
-           self.opponent.skill_slots[self.targeted_slot].opponent == self.combatant and self.opponent.skill_slots[self.targeted_slot].targeted_slot == self.combatant.skill_slots.index(self):
+           self.opponent.skill_slots[self.targeted_slot].opponent == self.combatant and self.opponent.skill_slots[self.targeted_slot].targeted_slot == self.combatant.skill_slots.index(self) or \
+           configs.CLASH_ALWAYS_FORCED:
             return True
 
         return False
@@ -572,7 +611,7 @@ class CombatSkill:
         # Critical Check
         crit_chance = self.combatant.get_status_amount(StatusType.POISE)
         if crit_chance > 0:
-            if random.randrange(20) < crit_chance * (2 if self.double_crit_chance else 1):
+            if random.randrange(20) < crit_chance * (2 if self.double_crit_chance else 1) + self.crit_bonus:
                 if configs.COMBAT_VERBOSE:
                     print("Critical!")
                 self.is_critical = True
@@ -754,10 +793,13 @@ class CombatSkill:
 
         # Check for bonus damage from effects on defender
         for status in self.opponent.statuses:
-            if status.type == StatusType.SINKING or status.type == StatusType.RUPTURE:
-                phase_4_damage += status.amount
-                if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
-                    phase_4_damage_sources.append([str(status.type), status.amount])
+            if status.type == StatusType.RUPTURE or status.type == StatusType.SINKING:
+                if status.type == StatusType.SINKING and configs.GAIN_LOSE_SANITY:
+                    self.opponent.gain_lose_sp(-1 * status.amount)
+                else:
+                    phase_4_damage += status.amount
+                    if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
+                        phase_4_damage_sources.append([str(status.type), status.amount])
 
                 self.opponent.lower_status_count(status.type)
 
@@ -812,7 +854,9 @@ class CombatSkill:
                     (condition.condition == EffectCondition.SPEND_CHARGE and self.combatant.spend_charge(condition.condition_amount)) or
                     (condition.condition == EffectCondition.ON_COIN and coin + 1 == condition.condition_amount) or
                     (condition.condition == EffectCondition.GOT_HEADS and heads) or
-                    (condition.condition == EffectCondition.ON_CRIT and self.is_critical)):
+                    (condition.condition == EffectCondition.ON_CRIT and self.is_critical) or
+                    (condition.condition == EffectCondition.TARGET_HAS_LESS_THAN_SP and self.opponent.sp < condition.condition_amount) or
+                    (condition.condition == EffectCondition.SELF_HAS_LESS_THAN_SP and self.combatant.sp < condition.condition_amount)):
                 conditions_met = False
                 break
 
@@ -876,9 +920,13 @@ class CombatSkill:
             elif effect.effect_detail == EffectDetails.BOOST_STATUS_OF_FUTURE_COIN:
                 self.status_boost += effect.amount
             elif effect.effect_detail == EffectDetails.GIVE_STATUS_TO_LOWEST_ALLY:
-                self.combatant.team.get_lowest_hp().apply_status(Status(effect.status, effect.amount + self.status_boost))
+                target = self.combatant.team.get_lowest_hp()
+                if target is not None:
+                    target.apply_status(Status(effect.status, effect.amount + self.status_boost))
             elif effect.effect_detail == EffectDetails.GIVE_STATUS_TO_SLOWEST_ALLY:
-                self.combatant.team.get_slowest().apply_status(Status(effect.status, effect.amount + self.status_boost))
+                target = self.combatant.team.get_slowest()
+                if target is not None:
+                    target.apply_status(Status(effect.status, effect.amount + self.status_boost))
             elif effect.effect_detail == EffectDetails.SKILL_POWER:
                 self.skill_power_bonus += effect.amount
             elif effect.effect_detail == EffectDetails.BURST_TREMOR:
@@ -920,6 +968,14 @@ class CombatSkill:
                 self.combatant.hp -= damage_amount
                 if configs.COMBAT_VERBOSE:
                     print(f"{self.combatant} hurts themself for {damage_amount}")
+            elif effect.effect_detail == EffectDetails.NEG_SP_TO_CRIT:
+                self.crit_bonus += abs(min(self.opponent.sp, 0))
+            elif effect.effect_detail == EffectDetails.HEAL_SP:
+                if configs.GAIN_LOSE_SANITY:
+                    self.combatant.gain_lose_sp(effect.amount)
+            elif effect.effect_detail == EffectDetails.TARGET_LOSE_SP:
+                if configs.GAIN_LOSE_SANITY:
+                    self.opponent.gain_lose_sp(-1 * effect.amount)
             else:
                 print("Warning: Skill effect not implemented.")
 
