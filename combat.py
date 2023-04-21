@@ -100,6 +100,9 @@ def clash(combatant1, skill1, combatant2, skill2):
 
     clashes = 0
 
+    skills[0].trigger_effect(EffectTrigger.ON_CLASH)
+    skills[1].trigger_effect(EffectTrigger.ON_CLASH)
+
     while skills[0].coins > 0 and skills[1].coins > 0:
         clashes += 1
 

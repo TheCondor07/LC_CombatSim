@@ -3,14 +3,14 @@
 import random
 import configs
 from combat import combat
-from operator import itemgetter
+import time
 
 from sinners import sinners
 
 if __name__ == '__main__':
 
     # For one off Fights
-    #combat([sinners["The One Who Grips Faust"]], [sinners["LCB Sinner Meursault"]])
+    combat([sinners["LCB Sinner Ryoshu"]], [sinners["LCB Sinner Meursault"]])
 
     # For test a lot of one specific fight
     """wins = [0,0]
@@ -37,11 +37,13 @@ if __name__ == '__main__':
 
         random.shuffle(match_ups)
 
+        t0 = time.time()
         for match_up in match_ups:
             wins = [0, 0]
-            num_of_fights += 1
+            print(f"{match_ups.index(match_up)}/{len(match_ups)}")
 
             while wins[0] < configs.FIRST_TO_X_WINS and wins[1] < configs.FIRST_TO_X_WINS:
+                num_of_fights += 1
                 fight_winner = combat([sinners[match_up[0]]], [sinners[match_up[1]]])
 
                 wins[fight_winner] += 1
@@ -52,6 +54,8 @@ if __name__ == '__main__':
             else:
                 win_stats[combatant_list.index(match_up[1])] += 1
                 fights.append([[sinners[match_up[0]].name, sinners[match_up[1]].name], f"{sinners[match_up[1]].name} beats {sinners[match_up[0]].name} ({configs.FIRST_TO_X_WINS}-{wins[0]})", [wins[0], wins[1]]])
+        t1 = time.time()
+        print(f"Total Time: {t1-t0}, Average Time per Fight: {(t1-t0)/num_of_fights}")
 
         final_list = sorted(zip(win_stats, combatant_list), reverse=True)
 

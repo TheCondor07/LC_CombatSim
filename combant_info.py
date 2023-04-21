@@ -20,6 +20,7 @@ class Sinner(typing.NamedTuple):
     res: list
     stagger: list
     skills: list
+    passive: Passive = None
 
 
 class Skill(typing.NamedTuple):
@@ -31,6 +32,14 @@ class Skill(typing.NamedTuple):
     coin_num: int
     general_effects: list
     coin_effects: list
+
+
+class Passive(typing.NamedTuple):
+    name: str
+    sin: Sin
+    amount_required: int
+    use_pool: bool
+    effects: list
 
 
 class CombatStats:
@@ -131,12 +140,9 @@ class CombatStats:
 
         for status in self.statuses:
             if status.type == status_to_lower:
-                status.count -= amount
-                new_count = status.count
-
-                if status.count == 0:
+                if status.change_count(-1 * amount):
                     self.statuses.remove(status)
-
+                new_count = status.count
                 status_found = True
 
         if status_found:
@@ -149,13 +155,11 @@ class CombatStats:
 
         for status in self.statuses:
             if status.type == status_to_lower:
-                status.amount -= 1
-                new_amount = status.amount
-
-                if status.amount == 0:
+                if status.change_amount(-1):
                     self.statuses.remove(status)
 
                 status_found = True
+                new_amount = status.get_amount()
 
         if status_found:
             if configs.COMBAT_VERBOSE:
@@ -170,8 +174,8 @@ class CombatStats:
                 if not status_not_found:
                     print(f"Warning: Duplicate status {status_to_raise} found on {self.sinner.name}")
 
-                status.count += count
-                new_count = status.count
+                status.change_count(count)
+                new_count = status.get_count()
 
                 status_not_found = False
 
@@ -190,9 +194,9 @@ class CombatStats:
                 if not status_not_found:
                     print(f"Warning: Duplicate status {status.type} found on {self.sinner.name}")
 
-                checked_status.amount += status.amount
-                new_status_amount = checked_status.amount
-                new_status_count = checked_status.count
+                checked_status.change_amount(status.get_amount())
+                new_status_amount = checked_status.get_amount()
+                new_status_count = checked_status.get_count()
                 status_not_found = False
                 break
 
@@ -202,7 +206,7 @@ class CombatStats:
             new_status_count = status.count
 
         if configs.COMBAT_VERBOSE:
-            print(f"{self.sinner.name} gains {status.amount} {status.type}, now ({new_status_count}, {new_status_amount})")
+            print(f"{self.sinner.name} gains {status.get_amount()} {status.type}, now ({new_status_count}, {new_status_amount})")
 
     def apply_status_next_turn(self, status: Status):
         self.status_next_turn.append(status)
@@ -253,14 +257,14 @@ class CombatStats:
     def get_status_amount(self, status_type: StatusDef):
         for status in self.statuses:
             if status.type == status_type:
-                return status.amount
+                return status.get_amount()
 
         return 0
 
     def get_status_count(self, status_type: StatusDef):
         for status in self.statuses:
             if status.type == status_type:
-                return status.count
+                return status.get_count()
 
         return 0
 
@@ -277,7 +281,7 @@ class CombatStats:
                 print(f"{self.sinner.name} has taken {bleed} bleed damage.")
 
     def coin_flip(self):
-        if random.randrange(100) < 50 + math.floor(self.sp * .45):
+        if random.randrange(100) < 50 + self.sp:
             return True
         else:
             return False
@@ -503,6 +507,7 @@ class CombatSkill:
     has_been_used = False
     can_be_clashed = True
     crit_bonus = 0
+    clash_power = 0
 
     def __str__(self):
         return self.skill.name
@@ -600,6 +605,12 @@ class CombatSkill:
         for coin in range(self.coins):
             if self.combatant.coin_flip():
                 clash_value += self.get_coin_power(coin, bonus_sources)[0]
+
+        if self.clash_power != 0:
+            clash_value += self.clash_power
+            if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
+                bonus_sources.append(["Clash Power", self.clash_power])
+
 
         return [clash_value, bonus_sources]
 
@@ -743,14 +754,14 @@ class CombatSkill:
                     (status.type == StatusType.PIERCE_DAMAGE_UP and self.skill.type == 1) or \
                     (status.type == StatusType.BLUNT_DAMAGE_UP and self.skill.type == 2) or \
                     (status.type == StatusType.DAMAGE_UP):
-                phase_3_mult += status.amount * 10
+                phase_3_mult += status.get_amount() * 10
                 if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
-                    phase_3_mult_sources.append([str(status.type), 10 * status.amount])
+                    phase_3_mult_sources.append([str(status.type), 10 * status.get_amount()])
 
             elif status.type == StatusType.DAMAGE_DOWN:
-                phase_3_mult -= status.amount * 10
+                phase_3_mult -= status.get_amount() * 10
                 if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
-                    phase_3_mult_sources.append([str(status.type), -10 * status.amount])
+                    phase_3_mult_sources.append([str(status.type), -10 * status.get_amount()])
 
         # Check for non-coin status bonuses on defender
         for status in self.opponent.statuses:
@@ -758,20 +769,20 @@ class CombatSkill:
                     (status.type == StatusType.PIERCE_FRAGILITY and self.skill.type == 1) or \
                     (status.type == StatusType.BLUNT_FRAGILITY and self.skill.type == 2) or \
                     (status.type == StatusType.FRAGILE):
-                phase_3_mult += status.amount * 10
+                phase_3_mult += status.get_amount() * 10
                 if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
-                    phase_3_mult_sources.append([str(status.type), 10 * status.amount])
+                    phase_3_mult_sources.append([str(status.type), 10 * status.get_amount()])
             elif (status.type == StatusType.SLASH_PROTECTION and self.skill.type == 0) or \
                  (status.type == StatusType.PIERCE_PROTECTION and self.skill.type == 1) or \
                  (status.type == StatusType.BLUNT_PROTECTION and self.skill.type == 2) or \
                  (status.type == StatusType.PROTECTION):
-                phase_3_mult -= status.amount * 10
+                phase_3_mult -= status.get_amount() * 10
                 if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
-                    phase_3_mult_sources.append([str(status.type), -10 * status.amount])
+                    phase_3_mult_sources.append([str(status.type), -10 * status.get_amount()])
             elif status.type == StatusType.GAZE and (self.skill.type == 1 or self.skill.type == 2):
-                phase_3_mult += status.amount * 20
+                phase_3_mult += status.get_amount() * 20
                 if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
-                    phase_3_mult_sources.append([str(status.type), 20 * status.amount])
+                    phase_3_mult_sources.append([str(status.type), 20 * status.get_amount()])
 
         if len(self.phase_3_mult_bonus_sources) > 0:
             phase_3_mult += self.phase_3_mult_bonus
@@ -795,11 +806,11 @@ class CombatSkill:
         for status in self.opponent.statuses:
             if status.type == StatusType.RUPTURE or status.type == StatusType.SINKING:
                 if status.type == StatusType.SINKING and configs.GAIN_LOSE_SANITY:
-                    self.opponent.gain_lose_sp(-1 * status.amount)
+                    self.opponent.gain_lose_sp(-1 * status.get_amount())
                 else:
-                    phase_4_damage += status.amount
+                    phase_4_damage += status.get_amount()
                     if configs.COMBAT_VERBOSE and configs.SHOW_BONUSES:
-                        phase_4_damage_sources.append([str(status.type), status.amount])
+                        phase_4_damage_sources.append([str(status.type), status.get_amount()])
 
                 self.opponent.lower_status_count(status.type)
 
@@ -837,8 +848,7 @@ class CombatSkill:
         conditions_met = True
 
         for condition in effect.condition:
-            if not (condition.condition == EffectCondition.NO_CONDITION or
-                    (condition.condition == EffectCondition.TARGET_HAS_STATUS_OF_AMOUNT and self.opponent.get_status_amount(condition.condition_status) >= condition.condition_amount) or
+            if not ((condition.condition == EffectCondition.TARGET_HAS_STATUS_OF_AMOUNT and self.opponent.get_status_amount(condition.condition_status) >= condition.condition_amount) or
                     (condition.condition == EffectCondition.TARGET_HAS_STATUS_OF_COUNT and self.opponent.get_status_count(condition.condition_status) >= condition.condition_amount) or
                     (condition.condition == EffectCondition.TARGET_HAS_LESS_STATUS_OF_AMOUNT and self.opponent.get_status_amount(condition.condition_status) < condition.condition_amount) or
                     (condition.condition == EffectCondition.SPEED_IS_HIGHER and self.combatant.speed > self.opponent.speed) or
@@ -856,7 +866,8 @@ class CombatSkill:
                     (condition.condition == EffectCondition.GOT_HEADS and heads) or
                     (condition.condition == EffectCondition.ON_CRIT and self.is_critical) or
                     (condition.condition == EffectCondition.TARGET_HAS_LESS_THAN_SP and self.opponent.sp < condition.condition_amount) or
-                    (condition.condition == EffectCondition.SELF_HAS_LESS_THAN_SP and self.combatant.sp < condition.condition_amount)):
+                    (condition.condition == EffectCondition.SELF_HAS_LESS_THAN_SP and self.combatant.sp < condition.condition_amount) or
+                    (condition.condition == EffectCondition.SELF_HAS_MORE_THAN_SP and self.combatant.sp < condition.condition_amount)):
                 conditions_met = False
                 break
 
@@ -976,6 +987,8 @@ class CombatSkill:
             elif effect.effect_detail == EffectDetails.TARGET_LOSE_SP:
                 if configs.GAIN_LOSE_SANITY:
                     self.opponent.gain_lose_sp(-1 * effect.amount)
+            elif effect.effect_detail == EffectDetails.REDUCE_CLASH_POWER:
+                self.opponent.skill_slots[self.targeted_slot].clash_power -= effect.amount
             else:
                 print("Warning: Skill effect not implemented.")
 
@@ -987,6 +1000,7 @@ class Effect(typing.NamedTuple):
     other: typing.Optional[int] = 0
     condition: typing.Optional[list] = list()
     status: typing.Optional[StatusType] = None
+
 
 class Condition(typing.NamedTuple):
     condition: EffectCondition
