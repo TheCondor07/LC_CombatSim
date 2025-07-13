@@ -9,10 +9,8 @@ from tools import format_sources
 
 
 def combat(fighters_team_1: list, fighters_team_2: list):
-    teams = [Team(), Team()]
+    teams = [Team(fighters_team_1), Team(fighters_team_2)]
 
-    teams[0].add_to_team(fighters_team_1)
-    teams[1].add_to_team(fighters_team_2)
     teams[0].opponents = teams[1]
     teams[1].opponents = teams[0]
 
@@ -61,21 +59,29 @@ def combat(fighters_team_1: list, fighters_team_2: list):
                 if combatant.can_act() and not skill.has_been_used and skill.opponent.hp > 0:
                     skill.has_been_used = True
                     skill.trigger_effect(EffectTrigger.ON_USE)
+                    combatant.trigger_passives(EffectTrigger.ON_USE, skill)
 
                     if skill.is_clashing():
                         skill.opponent.skill_slots[skill.targeted_slot].has_been_used = True
                         skill.opponent.skill_slots[skill.targeted_slot].trigger_effect(EffectTrigger.ON_USE)
+                        skill.opponent.trigger_passives(EffectTrigger.ON_USE, skill.opponent.skill_slots[skill.targeted_slot])
                         clash(skill.combatant, skill.combatant.skill_slots.index(skill), skill.opponent, skill.targeted_slot)
+                        combatant.team.sin_pool[skill.skill.sin] += 1
+                        skill.opponent.team.sin_pool[skill.opponent.skill_slots[skill.targeted_slot].skill.sin] += 1
                     else:
                         if configs.COMBAT_VERBOSE:
                             print(f"{skill.combatant.sinner.name} strikes one-sided against {skill.opponent.sinner.name} with {skill.skill.name}")
                             skill.strike()
+                            combatant.team.sin_pool[skill.skill.sin] += 1
 
                     if configs.COMBAT_VERBOSE:
                         print("")
 
         for combatant in combatants:
             combatant.end_of_turn()
+
+        for team in teams:
+            team.reinforcement_check()
 
     if len(teams[0].get_alive_sinners()) > 0:
         winner = 0
@@ -102,6 +108,8 @@ def clash(combatant1, skill1, combatant2, skill2):
 
     skills[0].trigger_effect(EffectTrigger.ON_CLASH)
     skills[1].trigger_effect(EffectTrigger.ON_CLASH)
+    skills[0].combatant.trigger_passives(EffectTrigger.ON_CLASH, skills[0])
+    skills[1].combatant.trigger_passives(EffectTrigger.ON_CLASH, skills[1])
 
     while skills[0].coins > 0 and skills[1].coins > 0:
         clashes += 1
@@ -148,12 +156,13 @@ def clash(combatant1, skill1, combatant2, skill2):
             defender = 0
 
         if configs.GAIN_LOSE_SANITY:
-            combatants_info[attacker].gain_lose_sp(round(10 * (1 + clashes * 0.25)))
+            combatants_info[attacker].gain_lose_sp(round(10 + (2 * (clashes - 1))))
 
         if configs.COMBAT_VERBOSE:
             print(combatants_info[attacker].sinner.name + " wins clash")
 
         skills[attacker].trigger_effect(EffectTrigger.ClASH_WIN)
+        skills[attacker].clash_won = True
         skills[defender].trigger_effect(EffectTrigger.ClASH_LOSE)
         skills[attacker].strike(clashes)
 

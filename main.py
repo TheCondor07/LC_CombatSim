@@ -10,17 +10,18 @@ from sinners import sinners
 if __name__ == '__main__':
 
     # For one off Fights
-    combat([sinners["LCB Sinner Ryoshu"]], [sinners["LCB Sinner Meursault"]])
+    # combat([sinners["Lobotomy E.G.O::Sloshing Ishmael"]], [sinners["LCB Sinner Meursault"]])
+    combat([sinners["LCB Sinner Meursault"],sinners["LCB Sinner Meursault"],sinners["LCB Sinner Meursault"],sinners["LCB Sinner Meursault"],sinners["LCB Sinner Meursault"],sinners["LCB Sinner Meursault"],sinners["LCB Sinner Sinclair"],sinners["LCB Sinner Yi Sang"]], [sinners["LCB Sinner Meursault"],sinners["LCB Sinner Meursault"],sinners["LCB Sinner Meursault"],sinners["LCB Sinner Meursault"],sinners["LCB Sinner Meursault"],sinners["LCB Sinner Meursault"],sinners["LCB Sinner Sinclair"],sinners["LCB Sinner Yi Sang"]])
 
     # For test a lot of one specific fight
-    """wins = [0,0]
-    for i in range(1000):
-        fight_winner = combat([sinners["R Corp. 4th Pack Rabbit Heathcliff"]],
-               [sinners["N Corp. Grosẞhammer Meursault"]])
-
-        wins[fight_winner] += 1
-
-    print(wins)"""
+    # wins = [0,0]
+    # for i in range(10000):
+    #     fight_winner = combat([sinners["Lobotomy E.G.O::Sloshing Ishmael"]],
+    #            [sinners["LCB Sinner Meursault"]])
+    #
+    #     wins[fight_winner] += 1
+    #
+    # print(wins)
 
     if configs.DO_FULL_TESTING:
         combatant_list = list(sinners.keys())
